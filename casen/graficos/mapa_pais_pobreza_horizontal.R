@@ -36,8 +36,9 @@ mapa_region_datos |>
 
 # https://gist.github.com/ryanpeek/99c6935ae51429761f5f73cf3b027da2
 # rotate function (see here: https://r-spatial.github.io/sf/articles/sf3.html#affine-transformations
-# rotate <- function(a) matrix(c(cos(a), sin(a), -sin(a), cos(a)), 2, 2)
-# rotate(-pi/2)
+# se multiplica la geometría por una matriz de rotación, porque como es un mapa está en espacio euclideano
+# https://en.wikipedia.org/wiki/Rotation_matrix
+# rotate <- function(a) matrix(c(cos(a), sin(a), -sin(a), cos(a)), 2, 2) #debiese definirse así, pero sale deformado
 
 mapa_region_datos_rotado <- mapa_region_datos |> 
   # mutate(geometry = geometry * rotate(-pi/2)) 
