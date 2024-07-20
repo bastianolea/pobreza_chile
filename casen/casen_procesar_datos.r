@@ -157,16 +157,20 @@ pobreza_pais <- casen_pais_conteo_personas_p |>
   select(ends_with("_p"))
 
 pobreza_comuna <- casen_comuna_conteo_personas_p |> 
-  select(cut_comuna, comuna, ends_with("_p"))
+  select(cut_comuna, comuna, ends_with("_p")) |> 
+  mutate(across(where(is.labelled), as.numeric))
 
 pobreza_region <- casen_region_conteo_personas_p |> 
-  select(region, ends_with("_p"))
+  select(region, ends_with("_p")) |> 
+  mutate(across(where(is.labelled), as.numeric))
 
 ingresos_pais <- casen_pais_numericos_personas
 
-ingresos_comuna <- casen_comuna_numericos_personas
+ingresos_comuna <- casen_comuna_numericos_personas |> 
+  mutate(across(where(is.labelled), as.numeric))
 
-ingresos_region <- casen_region_numericos_personas
+ingresos_region <- casen_region_numericos_personas |> 
+  mutate(across(where(is.labelled), as.numeric))
 
 
 # guardar ----
@@ -183,3 +187,8 @@ pobreza_region |> write_csv2("casen/datos_procesados/casen_pobreza_region.csv")
 ingresos_pais |> write_csv2("casen/datos_procesados/casen_ingresos_pais.csv")
 ingresos_comuna |> write_csv2("casen/datos_procesados/casen_ingresos_comuna.csv")
 ingresos_region |> write_csv2("casen/datos_procesados/casen_ingresos_region.csv")
+
+# traspasar a la app
+read_rds("casen/datos_procesados/casen_pobreza_pais.rds") |> write_rds("app/datos/casen_pobreza_pais.rds")
+read_rds("casen/datos_procesados/casen_pobreza_comuna.rds") |> write_rds("app/datos/casen_pobreza_comuna.rds")
+read_rds("casen/datos_procesados/casen_pobreza_region.rds") |> write_rds("app/datos/casen_pobreza_region.rds")
