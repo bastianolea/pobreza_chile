@@ -6,6 +6,7 @@ library(ggplot2)
 library(ggiraph)
 library(bslib)
 library(thematic)
+library(shinycssloaders)
 
 # cargar datos ----
 casen_pais <- read_rds("datos/casen_pobreza_pais.rds")
@@ -17,7 +18,10 @@ mapas_regiones <- read_rds("datos/mapas_regiones.rds")
 
 colores <- list("fondo" = "#181818",
                 "texto" = "black",
-                "bajo" = "#999999")
+                "bajo" = "#999999",
+                "principal" = "#581695")
+
+options(spinner.type = 8, spinner.color = colores$principal)
 
 
 ui <- fluidPage(
@@ -26,12 +30,12 @@ ui <- fluidPage(
   fluidRow(
     column(4, #style = "border: 1px red solid;",
            div(#style = "max-height: 600px;",
-           girafeOutput("mapa_pais", height = 700)#, width = 200, height = 600)
+           girafeOutput("mapa_pais", height = 700) |> withSpinner(proxy.height = 400)
            )
     ),
     column(8, #style = "border: 1px blue solid;",
            div(#style = "max-height: 200px;",
-           girafeOutput("mapa_region", height = 400)#, width = 300, height = 400)
+           girafeOutput("mapa_region", height = 400) |> withSpinner()
            )
     )
   )
@@ -43,21 +47,28 @@ server <- function(input, output) {
   
   # mapas ----
   
+  # unir mapa con datos
+  mapa_pais_datos <- reactive({
+    message("datos mapa país...")
+    
+    mapa_pais |> 
+    left_join(casen_region,
+              by = c("codigo_region" = "region"))
+  })
+  
   ## mapa país ----
   output$mapa_pais <- renderGirafe({
-    # unir mapa con datos
-    mapa_pais_datos <- mapa_pais |> 
-      left_join(casen_region,
-                by = c("codigo_region" = "region"))
+    req(mapa_pais_datos())
+    message("gráfico mapa país...")
     
     # gráfico
-    p <- mapa_pais_datos |> 
+    p <- mapa_pais_datos() |> 
       ggplot(aes(fill = pobreza_p, 
                  geometry = geometry,
                  data_id = codigo_region) #variable de la que depende el hover y selección
       ) + 
       geom_sf_interactive(color = colores$fondo) +
-      scale_fill_gradient(low = colores$bajo, high = "#581695", limits = c(0, NA)) +
+      scale_fill_gradient(low = colores$bajo, high = colores$principal, limits = c(0, NA)) +
       theme_void() +
       guides(fill = guide_none()) +
       coord_sf(xlim = c(-76, -67), expand = FALSE)
@@ -78,11 +89,6 @@ server <- function(input, output) {
     ) 
   })
   
-  # recibir selección de región desde el mapa
-  # observeEvent(input$mapa_pais_selected, {
-  #   message("Seleccionado ", input$mapa_pais_selected)
-  # })
-  
   
   ## mapa región ----
   ## selector de mapas ----
@@ -94,20 +100,23 @@ server <- function(input, output) {
         !is.na(input$mapa_pais_selected),
         !is.null(input$mapa_pais_selected))
     
-      message("Seleccionado ", input$mapa_pais_selected)
+      message("región seleccionada: ", input$mapa_pais_selected)
       input$mapa_pais_selected
   })
   
   # elegir región filtrando la lista
   mapa_region <- reactive({
-    message("Mapa region ", region_seleccionada())
+    req(region_seleccionada())
+    
+    message("mapa region...")
     mapas_regiones[[as.numeric(region_seleccionada())]]
   })
   
   # unir mapa con datos
   mapa_region_datos <- reactive({
     req(mapa_region())
-    # browser()
+    message("datos mapa region...")
+    
     mapa_region() |>
       mutate(codigo_comuna = as.numeric(codigo_comuna)) |> 
       left_join(casen_comuna |> 
@@ -117,7 +126,10 @@ server <- function(input, output) {
   
   
   output$mapa_region <- renderGirafe({
+    req(mapa_pais_datos())
+    req(region_seleccionada())
     req(mapa_region_datos())
+    message("gráfico mapa region...")
     
     p <- mapa_region_datos() |> 
       ggplot(aes(fill = pobreza_p, 
@@ -126,7 +138,7 @@ server <- function(input, output) {
       ) + 
       geom_sf_interactive(color = colores$fondo) +
       coord_sf(expand = FALSE) +
-      scale_fill_gradient(low = colores$bajo, high = "#581695", limits = c(0, NA)) +
+      scale_fill_gradient(low = colores$bajo, high = colores$principal, limits = c(0, NA)) +
       theme_void() +
       guides(fill = guide_none()) +
       theme(plot.margin = unit(rep(0, 4), "mm"))
@@ -149,5 +161,4 @@ server <- function(input, output) {
   
 }
 
-# Run the application 
 shinyApp(ui = ui, server = server)
