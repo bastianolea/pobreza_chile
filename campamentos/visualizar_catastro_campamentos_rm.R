@@ -34,7 +34,7 @@ mapa_urbano <- mapa_zonas_urbanas |>
 # carga los datos de campamentos descargados
 
 # geo <- read_sf("datos/2024/FL_Actualizaci%C3%B3n_Campamentos_2024.geojson")
-geo <- read_sf("datos/catastro_campamentos_2024.geojson")
+geo <- read_sf("campamentos/datos_originales/catastro_campamentos_2024.geojson")
 
 # limpiar datos y convertir polígonos a puntos
 campamentos_rm <- geo |> 

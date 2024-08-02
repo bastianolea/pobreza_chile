@@ -7,6 +7,7 @@ library(ggiraph)
 library(bslib)
 library(thematic)
 library(shinycssloaders)
+library(htmltools)
 
 # cargar datos ----
 casen_pais <- read_rds("datos/casen_pobreza_pais.rds")
@@ -16,16 +17,32 @@ casen_region <- read_rds("datos/casen_pobreza_region.rds")
 mapa_pais <- read_rds("datos/mapa_pais.rds")
 mapas_regiones <- read_rds("datos/mapas_regiones.rds")
 
+# colores ----
 colores <- list("fondo" = "#181818",
-                "texto" = "black",
+                "texto" = "white",
                 "bajo" = "#999999",
                 "principal" = "#581695")
 
+# opciones ----
 options(spinner.type = 8, spinner.color = colores$principal)
 
-
+# ui ----
 ui <- fluidPage(
-  theme = bs_theme(bg = colores$fondo, fg = colores$texto),
+  ## tema ----
+  theme = bs_theme(bg = colores$fondo, 
+                   fg = colores$texto),
+  
+  ## header ----
+  fluidRow(
+    column(12, style = css(margin_top = "12px"),
+           h1("Pobreza en Chile"),
+           em("Bastián Olea Herrera"),
+           
+           p("Dashboard sobre datos de pobreza"),
+           hr()
+    )
+  ),
+
   
   fluidRow(
     column(4, #style = "border: 1px red solid;",
@@ -42,7 +59,7 @@ ui <- fluidPage(
 )
 
 
-
+#server ----
 server <- function(input, output) {
   
   # mapas ----
