@@ -45,13 +45,17 @@ ui <- fluidPage(
 
   
   fluidRow(
+    ## mapa país ----
     column(4, #style = "border: 1px red solid;",
            div(#style = "max-height: 600px;",
            girafeOutput("mapa_pais", height = 700) |> withSpinner(proxy.height = 400)
            )
     ),
+    ## mapa región ----
     column(8, #style = "border: 1px blue solid;",
            div(#style = "max-height: 200px;",
+             plotOutput("torta"),
+             
            girafeOutput("mapa_region", height = 400) |> withSpinner()
            )
     )
@@ -61,6 +65,36 @@ ui <- fluidPage(
 
 #server ----
 server <- function(input, output) {
+  
+  
+  # gráfico torta ----
+  output$torta <- renderPlot({
+    
+    data <- tribble(~"valor", ~"tipo",
+    casen_pais$pobreza_p, "pobreza",
+    1 - casen_pais$pobreza_p, "total")
+    
+    data_2 <- data |> 
+      arrange(desc(valor)) %>%
+      mutate(prop = valor / sum(data$valor)) %>%
+      mutate(ypos = cumsum(prop)- 0.5*prop) |> 
+      mutate(etiqueta = valor |> round(3),
+             etiqueta = etiqueta * 100,
+             etiqueta = etiqueta |> 
+               format(trim = TRUE, decimal.mark = ",", big.mark = "."),
+             etiqueta = paste0(etiqueta, "%"))
+    
+    ggplot(data_2, aes(x="", y = valor, fill = tipo)) +
+      geom_bar(stat = "identity", 
+               width = 1, color = "white") +
+      geom_text(aes(y = ypos, label = etiqueta), 
+                nudge_x = .7,
+                color = "black", size = 6) +
+      coord_polar("y", start=2.5) +
+      theme_void() +
+      theme(plot.margin = margin(unit(rep(-40, 4), "cm"))) +
+      guides(fill = guide_none())
+  })
   
   # mapas ----
   
