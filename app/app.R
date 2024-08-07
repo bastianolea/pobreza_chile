@@ -9,19 +9,28 @@ library(thematic)
 library(shinycssloaders)
 library(htmltools)
 
+source("funciones.R")
+
 # cargar datos ----
 casen_pais <- read_rds("datos/casen_pobreza_pais.rds")
 casen_comuna <- read_rds("datos/casen_pobreza_comuna.rds")
 casen_region <- read_rds("datos/casen_pobreza_region.rds")
 
+# setwd("app")
 mapa_pais <- read_rds("datos/mapa_pais.rds")
 mapas_regiones <- read_rds("datos/mapas_regiones.rds")
 
 # colores ----
-colores <- list("fondo" = "#181818",
-                "texto" = "white",
+# colores <- list("fondo" = "#181818",
+#                 "texto" = "white",
+#                 "bajo" = "#999999",
+#                 "principal" = "#581695")
+
+colores <- list("fondo" = "#909090",
+                "texto" = "#181818",
                 "bajo" = "#999999",
-                "principal" = "#581695")
+                "alto" = "#F22222",
+                "principal" = "#F22222")
 
 # opciones ----
 options(spinner.type = 8, spinner.color = colores$principal)
@@ -42,21 +51,36 @@ ui <- fluidPage(
            hr()
     )
   ),
-
+  
+  fluidRow(
+    ## torta ----
+    column(6,
+           div(
+             plotOutput("torta")
+           )
+    ),
+    
+    column(6,
+           div(
+             # plotOutput("torta")
+           )
+    )
+  ),
+    
   
   fluidRow(
     ## mapa país ----
     column(4, #style = "border: 1px red solid;",
            div(#style = "max-height: 600px;",
-           girafeOutput("mapa_pais", height = 700) |> withSpinner(proxy.height = 400)
+             girafeOutput("mapa_pais", height = 700) |> withSpinner(proxy.height = 400)
            )
     ),
     ## mapa región ----
     column(8, #style = "border: 1px blue solid;",
            div(#style = "max-height: 200px;",
-             plotOutput("torta"),
              
-           girafeOutput("mapa_region", height = 400) |> withSpinner()
+             
+             girafeOutput("mapa_region", height = 400) |> withSpinner()
            )
     )
   )
@@ -71,8 +95,8 @@ server <- function(input, output) {
   output$torta <- renderPlot({
     
     data <- tribble(~"valor", ~"tipo",
-    casen_pais$pobreza_p, "pobreza",
-    1 - casen_pais$pobreza_p, "total")
+                    casen_pais$pobreza_p, "pobreza",
+                    1 - casen_pais$pobreza_p, "total")
     
     data_2 <- data |> 
       arrange(desc(valor)) %>%
@@ -91,10 +115,13 @@ server <- function(input, output) {
                 nudge_x = .7,
                 color = "black", size = 6) +
       coord_polar("y", start=2.5) +
+      scale_fill_manual(values = c(colores$alto, colores$bajo)) +
       theme_void() +
       theme(plot.margin = margin(unit(rep(-40, 4), "cm"))) +
-      guides(fill = guide_none())
-  })
+      guides(fill = guide_none()) +
+      theme(plot.background = element_rect(fill = colores$fondo, color = colores$fondo),
+            panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
+  }, bg = colores$fondo)
   
   # mapas ----
   
@@ -103,20 +130,26 @@ server <- function(input, output) {
     message("datos mapa país...")
     
     mapa_pais |> 
-    left_join(casen_region,
-              by = c("codigo_region" = "region"))
+      left_join(casen_region,
+                by = c("codigo_region" = "region"))
   })
+  
   
   ## mapa país ----
   output$mapa_pais <- renderGirafe({
     req(mapa_pais_datos())
     message("gráfico mapa país...")
     
+    # browser()
     # gráfico
     p <- mapa_pais_datos() |> 
       ggplot(aes(fill = pobreza_p, 
                  geometry = geometry,
-                 data_id = codigo_region) #variable de la que depende el hover y selección
+                 data_id = codigo_region, #variable de la que depende el hover y selección
+                 tooltip = paste0(nombre_region, ": ",
+                                  porcentaje(pobreza_p)
+                 )
+      )
       ) + 
       geom_sf_interactive(color = colores$fondo) +
       scale_fill_gradient(low = colores$bajo, high = colores$principal, limits = c(0, NA)) +
@@ -133,11 +166,29 @@ server <- function(input, output) {
              # estilos de selección y hover
              opts_selection(css = "", type = "single", selected = 13),
              opts_hover_inv(css = "opacity:0.5;"),
-             opts_hover(css = ""),
+             # opts_hover(css = ""),
+             opts_hover(css = paste0("fill: ", colores$principal, ";")),
+             opts_tooltip(
+               opacity = 0.8,
+               css = paste0("background-color: ", colores$fondo, "; color: ", colores$texto, ";
+                                        padding: 4px; max-width: 200px; border-radius: 4px; font-size: 80%;")),
              # otros estilos
              opts_sizing(rescale = TRUE),
              opts_toolbar(hidden = "selection", saveaspng = FALSE))
     ) 
+    # girafe(ggobj = grafico(), 
+    #        bg = colores$fondo,
+    #        width_svg = 7,
+    #        height_svg = 6,
+    #        options = list(
+    #          opts_sizing(rescale = TRUE),
+    #          opts_toolbar(hidden = "selection", saveaspng = FALSE),
+    #          opts_hover(css = paste0("fill: ", colores$principal, ";")),
+    #          opts_tooltip(
+    #            opacity = 0.8,
+    #            css = paste0("background-color: ", colores$fondo, "; color: ", colores$texto, ";
+    #                            padding: 4px; max-width: 200px; border-radius: 4px; font-size: 80%;")) 
+    #        ))
   })
   
   
@@ -151,8 +202,8 @@ server <- function(input, output) {
         !is.na(input$mapa_pais_selected),
         !is.null(input$mapa_pais_selected))
     
-      message("región seleccionada: ", input$mapa_pais_selected)
-      input$mapa_pais_selected
+    message("región seleccionada: ", input$mapa_pais_selected)
+    input$mapa_pais_selected
   })
   
   # elegir región filtrando la lista
@@ -184,8 +235,11 @@ server <- function(input, output) {
     
     p <- mapa_region_datos() |> 
       ggplot(aes(fill = pobreza_p, 
-        geometry = geometry,
-        data_id = codigo_comuna) #variable de la que depende el hover y selección
+                 geometry = geometry,
+                 data_id = codigo_comuna, #variable de la que depende el hover y selección
+                 tooltip = paste0(nombre_comuna, ": ",
+                                  porcentaje(pobreza_p)
+                 ))
       ) + 
       geom_sf_interactive(color = colores$fondo) +
       coord_sf(expand = FALSE) +
@@ -202,8 +256,13 @@ server <- function(input, output) {
            options = list(
              # estilos de selección y hover
              opts_selection(css = "", type = "single", selected = 13),
-             opts_hover_inv(css = "opacity:0.5;"),
-             opts_hover(css = ""),
+             # opts_hover_inv(css = "opacity:0.5;"),
+             # opts_hover(css = ""),
+             opts_hover(css = paste0("fill: ", colores$principal, ";")),
+             opts_tooltip(
+               opacity = 0.8,
+               css = paste0("background-color: ", colores$fondo, "; color: ", colores$texto, ";
+                                        padding: 4px; max-width: 200px; border-radius: 4px; font-size: 80%;")),
              # otros estilos
              opts_sizing(rescale = TRUE),
              opts_toolbar(hidden = "selection", saveaspng = FALSE))
