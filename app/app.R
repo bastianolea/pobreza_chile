@@ -12,10 +12,11 @@ library(htmltools)
 source("funciones.R")
 
 # cargar datos ----
-pobreza_casen <- readr::read_rds("app/datos/casen_2022_pobreza.rds")
-ingresos_casen <- readr::read_rds("app/datos/casen_2022_ingresos.rds")
+pobreza_casen <- readr::read_rds("datos/casen_2022_pobreza.rds")
+ingresos_casen <- readr::read_rds("datos/casen_2022_ingresos.rds")
 
-pobreza_historico <- readr::read_rds("app/datos/pobreza_historico.rds")
+# pobreza_historico <- readr::read_rds("app/datos/pobreza_historico.rds")
+pobreza_historico <- readr::read_rds("datos/pobreza_historico.rds")
 
 # setwd("app")
 mapa_pais <- read_rds("datos/mapa_pais.rds")
@@ -79,25 +80,35 @@ ui <- fluidPage(
     ## mapa región ----
     column(8, #style = "border: 1px blue solid;",
            div(#style = "max-height: 200px;",
-             
-             
              girafeOutput("mapa_region", height = 400) |> withSpinner()
+           ),
+           
+           div(
+             # selectInput("selector_evolucion", label = "ver", choices = c("Región", "Comuna")),
+             
+             # el gráfico muestra datos de región al elegir una región, o de comuna si se aprieta una comuna, y vuelve a mostrar región si se cambia de región
+             plotOutput("grafico_evolucion") |> withSpinner()
            )
     )
-  )
+  ),
+  
+  # barras
 )
 
 
 #server ----
 server <- function(input, output) {
   
+  casen_pais <- reactive(pobreza_casen |> filter(nivel == "pais"))
+  casen_region <- reactive(pobreza_casen |> filter(nivel == "region"))
+  casen_comuna <- reactive(pobreza_casen |> filter(nivel == "comuna"))
   
   # gráfico torta ----
   output$torta <- renderPlot({
     
     data <- tribble(~"valor", ~"tipo",
-                    casen_pais$pobreza_p, "pobreza",
-                    1 - casen_pais$pobreza_p, "total")
+                    casen_pais()$pobreza_p, "pobreza",
+                    1 - casen_pais()$pobreza_p, "total")
     
     data_2 <- data |> 
       arrange(desc(valor)) %>%
@@ -131,7 +142,7 @@ server <- function(input, output) {
     message("datos mapa país...")
     
     mapa_pais |> 
-      left_join(casen_region,
+      left_join(casen_region(),
                 by = c("codigo_region" = "region"))
   })
   
@@ -193,8 +204,8 @@ server <- function(input, output) {
   })
   
   
-  ## mapa región ----
-  ## selector de mapas ----
+  
+  ### selector de mapas ----
   # si la región elegida es el gran santiago, pasa como 99 y elige el mapa específico;
   # de lo contrario, simplemente carga el mapa de la región correspondiente
   region_seleccionada <- reactive({
@@ -204,8 +215,10 @@ server <- function(input, output) {
         !is.null(input$mapa_pais_selected))
     
     message("región seleccionada: ", input$mapa_pais_selected)
-    input$mapa_pais_selected
+    return(input$mapa_pais_selected)
   })
+  
+  ## mapa región ----
   
   # elegir región filtrando la lista
   mapa_region <- reactive({
@@ -222,7 +235,7 @@ server <- function(input, output) {
     
     mapa_region() |>
       mutate(codigo_comuna = as.numeric(codigo_comuna)) |> 
-      left_join(casen_comuna |> 
+      left_join(casen_comuna() |> 
                   mutate(cut_comuna = as.numeric(cut_comuna)),
                 by = c("codigo_comuna" = "cut_comuna"))
   })
@@ -256,7 +269,7 @@ server <- function(input, output) {
            height_svg = 4,
            options = list(
              # estilos de selección y hover
-             opts_selection(css = "", type = "single", selected = 13),
+             opts_selection(css = "", type = "single", selected = NULL),
              # opts_hover_inv(css = "opacity:0.5;"),
              # opts_hover(css = ""),
              opts_hover(css = paste0("fill: ", colores$principal, ";")),
@@ -268,6 +281,51 @@ server <- function(input, output) {
              opts_sizing(rescale = TRUE),
              opts_toolbar(hidden = "selection", saveaspng = FALSE))
     ) 
+  })
+  
+  
+  # comuna seleccionada ----
+  # inicialmente es NULL, si se elige una comuna adquiere su código único, y si se cambia de región vuelve a ser NULL
+  seleccion <- reactiveValues(comuna = NULL)
+  
+  observeEvent(region_seleccionada(), {
+    seleccion$comuna <- NULL
+  })
+  
+  observeEvent(input$mapa_region_selected, {
+    req(input$mapa_region_selected != "",
+        length(input$mapa_region_selected) == 1,
+        !is.na(input$mapa_region_selected),
+        !is.null(input$mapa_region_selected))
+  
+    message("comuna seleccionada: ", input$mapa_region_selected)
+    
+    seleccion$comuna <- input$mapa_region_selected
+  })
+  
+  # gráficos
+  ## evolución region/comuna ----
+  # el gráfico muestra datos de región al elegir una región, o de comuna si se aprieta una comuna, y vuelve a mostrar región si se cambia de región
+  
+  output$grafico_evolucion <- renderPlot({
+    
+    # if (input$selector_evolucion == "Región") {
+    if (is.null(seleccion$comuna) || seleccion$comuna == "") {
+    pobreza_historico |> 
+      filter(nivel == "region") |> 
+      filter(cut_region == region_seleccionada()) |> 
+      filter(pobreza != "No pobres") |> 
+      ggplot(aes(año, p, fill = pobreza)) +
+      geom_area()
+      
+    } else {
+      pobreza_historico |> 
+        filter(nivel == "comuna") |> 
+        filter(cut_comuna == seleccion$comuna) |> 
+        filter(pobreza != "No pobres") |> 
+        ggplot(aes(año, p, fill = pobreza)) +
+        geom_area()
+    }
   })
   
 }
