@@ -9,7 +9,7 @@ library(thematic)
 library(shinycssloaders)
 library(htmltools)
 
-source("funciones.R")
+
 
 # cargar datos ----
 pobreza_casen <- readr::read_rds("datos/casen_2022_pobreza.rds")
@@ -21,6 +21,8 @@ pobreza_historico <- readr::read_rds("datos/pobreza_historico.rds")
 # setwd("app")
 mapa_pais <- read_rds("datos/mapa_pais.rds")
 mapas_regiones <- read_rds("datos/mapas_regiones.rds")
+
+campamentos <- read_rds("datos/campamentos_chile_puntos.rds")
 
 # colores ----
 # colores <- list("fondo" = "#181818",
@@ -34,11 +36,14 @@ colores <- list("fondo" = "#909090",
                 "alto" = "#F22222",
                 "principal" = "#F22222")
 
+# funciones ----
+source("funciones.R")
+
 # opciones ----
 options(spinner.type = 8, spinner.color = colores$principal)
 
 # ui ----
-ui <- fluidPage(
+ui <- page_fluid(
   ## tema ----
   theme = bs_theme(bg = colores$fondo, 
                    fg = colores$texto),
@@ -68,7 +73,7 @@ ui <- fluidPage(
            )
     )
   ),
-    
+  
   
   fluidRow(
     ## mapa país ----
@@ -92,7 +97,12 @@ ui <- fluidPage(
     )
   ),
   
-  # barras
+  # campamentos ----
+  fluidRow(
+    column(12,
+           girafeOutput("mapa_region_campamentos", height = 600) |> withSpinner()
+    )
+  )
 )
 
 
@@ -284,6 +294,61 @@ server <- function(input, output) {
   })
   
   
+  ## mapa region campamentos ----
+  
+  output$mapa_region_campamentos <- renderGirafe({
+    req(region_seleccionada())
+    req(mapa_region_datos())
+    message("mapa region campamentos...")
+    
+    # browser()
+    mapa_campamentos <- campamentos |> 
+      filter(cut_r == region_seleccionada()) |> 
+      filter(n_hog > 0)
+    
+    
+    p <- mapa_campamentos |> 
+      ggplot() + 
+      geom_sf(data = mapa_region(),
+              aes(geometry = geometry),
+              fill = colores$bajo, color = colores$fondo) +
+      geom_sf_interactive(aes(geometry = punto,
+                              data_id = nombre, #variable de la que depende el hover y selección
+                              size = n_hog,
+                              tooltip = paste0(nombre, ": ",
+                                               n_hog, " hogares")
+      ),
+      color = colores$alto, alpha = 0.5) +
+      coord_sf(expand = FALSE, clip = "off") +
+      scale_size(range = c(2, 15)) +
+      theme_void() +
+      guides(fill = guide_none()) +
+      theme(plot.margin = unit(rep(0, 4), "mm")) +
+      theme(plot.background = element_rect(fill = colores$fondo, color = colores$fondo),
+            panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
+    
+    # crear gráfico interactivo
+    girafe(ggobj = p,
+           bg = colores$fondo,
+           width_svg = 4,
+           height_svg = 4,
+           options = list(
+             # estilos de selección y hover
+             opts_selection(css = "", type = "single", selected = NULL),
+             # opts_hover_inv(css = "opacity:0.5;"),
+             # opts_hover(css = ""),
+             opts_hover(css = paste0("fill: ", colores$principal, ";")),
+             opts_tooltip(
+               opacity = 0.8,
+               css = paste0("background-color: ", colores$fondo, "; color: ", colores$texto, ";
+                                        padding: 4px; max-width: 200px; border-radius: 4px; font-size: 80%;")),
+             # otros estilos
+             opts_sizing(rescale = TRUE),
+             opts_toolbar(hidden = "selection", saveaspng = FALSE))
+    ) 
+  })
+  
+  
   # comuna seleccionada ----
   # inicialmente es NULL, si se elige una comuna adquiere su código único, y si se cambia de región vuelve a ser NULL
   seleccion <- reactiveValues(comuna = NULL)
@@ -297,7 +362,7 @@ server <- function(input, output) {
         length(input$mapa_region_selected) == 1,
         !is.na(input$mapa_region_selected),
         !is.null(input$mapa_region_selected))
-  
+    
     message("comuna seleccionada: ", input$mapa_region_selected)
     
     seleccion$comuna <- input$mapa_region_selected
@@ -311,12 +376,15 @@ server <- function(input, output) {
     
     # if (input$selector_evolucion == "Región") {
     if (is.null(seleccion$comuna) || seleccion$comuna == "") {
-    pobreza_historico |> 
-      filter(nivel == "region") |> 
-      filter(cut_region == region_seleccionada()) |> 
-      filter(pobreza != "No pobres") |> 
-      ggplot(aes(año, p, fill = pobreza)) +
-      geom_area()
+      pobreza_historico |> 
+        filter(nivel == "region") |> 
+        filter(cut_region == region_seleccionada()) |> 
+        filter(pobreza != "No pobres") |> 
+        ggplot(aes(año, p, fill = pobreza)) +
+        geom_area() +
+        theme_minimal() +
+        theme(plot.background = element_rect(fill = colores$fondo, color = colores$fondo),
+              panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
       
     } else {
       pobreza_historico |> 
@@ -324,7 +392,10 @@ server <- function(input, output) {
         filter(cut_comuna == seleccion$comuna) |> 
         filter(pobreza != "No pobres") |> 
         ggplot(aes(año, p, fill = pobreza)) +
-        geom_area()
+        geom_area() +
+        theme_minimal() +
+        theme(plot.background = element_rect(fill = colores$fondo, color = colores$fondo),
+              panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
     }
   })
   
