@@ -12,9 +12,10 @@ library(htmltools)
 source("funciones.R")
 
 # cargar datos ----
-casen_pais <- read_rds("datos/casen_pobreza_pais.rds")
-casen_comuna <- read_rds("datos/casen_pobreza_comuna.rds")
-casen_region <- read_rds("datos/casen_pobreza_region.rds")
+pobreza_casen <- readr::read_rds("app/datos/casen_2022_pobreza.rds")
+ingresos_casen <- readr::read_rds("app/datos/casen_2022_ingresos.rds")
+
+pobreza_historico <- readr::read_rds("app/datos/pobreza_historico.rds")
 
 # setwd("app")
 mapa_pais <- read_rds("datos/mapa_pais.rds")

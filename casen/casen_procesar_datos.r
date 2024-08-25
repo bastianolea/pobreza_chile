@@ -174,21 +174,29 @@ ingresos_region <- casen_region_numericos_personas |>
 
 
 # guardar ----
-pobreza_pais |> write_rds("casen/datos_procesados/casen_pobreza_pais.rds")
-pobreza_comuna |> write_rds("casen/datos_procesados/casen_pobreza_comuna.rds")
-pobreza_region |> write_rds("casen/datos_procesados/casen_pobreza_region.rds")
-ingresos_pais |> write_rds("casen/datos_procesados/casen_ingresos_pais.rds")
-ingresos_comuna |> write_rds("casen/datos_procesados/casen_ingresos_comuna.rds")
-ingresos_region |> write_rds("casen/datos_procesados/casen_ingresos_region.rds")
 
-pobreza_pais |> write_csv2("casen/datos_procesados/casen_pobreza_pais.csv")
-pobreza_comuna |> write_csv2("casen/datos_procesados/casen_pobreza_comuna.csv")
-pobreza_region |> write_csv2("casen/datos_procesados/casen_pobreza_region.csv")
-ingresos_pais |> write_csv2("casen/datos_procesados/casen_ingresos_pais.csv")
-ingresos_comuna |> write_csv2("casen/datos_procesados/casen_ingresos_comuna.csv")
-ingresos_region |> write_csv2("casen/datos_procesados/casen_ingresos_region.csv")
+pobreza_casen <- bind_rows(pobreza_pais |> mutate(nivel = "pais"),
+                           pobreza_comuna |> mutate(nivel = "comuna"),
+                           pobreza_region |> mutate(nivel = "region"))
+
+# pobreza_pais |> write_rds("casen/datos_procesados/casen_pobreza_pais.rds")
+# pobreza_comuna |> write_rds("casen/datos_procesados/casen_pobreza_comuna.rds")
+# pobreza_region |> write_rds("casen/datos_procesados/casen_pobreza_region.rds")
+
+ingresos_casen <- bind_rows(ingresos_pais |> mutate(nivel = "pais"),
+                            ingresos_comuna |> mutate(nivel = "comuna"),
+                            ingresos_region |> mutate(nivel = "region"))
+
+# ingresos_pais |> write_rds("casen/datos_procesados/casen_ingresos_pais.rds")
+# ingresos_comuna |> write_rds("casen/datos_procesados/casen_ingresos_comuna.rds")
+# ingresos_region |> write_rds("casen/datos_procesados/casen_ingresos_region.rds")
+
+readr::write_rds(pobreza_casen, "casen/datos_procesados/casen_2022_pobreza.rds")
+readr::write_rds(ingresos_casen, "casen/datos_procesados/casen_2022_ingresos.rds")
+
+readr::write_csv2(pobreza_casen, "casen/datos_procesados/casen_2022_pobreza.csv")
+readr::write_csv2(ingresos_casen, "casen/datos_procesados/casen_2022_ingresos.csv")
 
 # traspasar a la app
-read_rds("casen/datos_procesados/casen_pobreza_pais.rds") |> write_rds("app/datos/casen_pobreza_pais.rds")
-read_rds("casen/datos_procesados/casen_pobreza_comuna.rds") |> write_rds("app/datos/casen_pobreza_comuna.rds")
-read_rds("casen/datos_procesados/casen_pobreza_region.rds") |> write_rds("app/datos/casen_pobreza_region.rds")
+read_rds("casen/datos_procesados/casen_2022_pobreza.rds") |> write_rds("app/datos/casen_2022_pobreza.rds")
+read_rds("casen/datos_procesados/casen_2022_ingresos.rds") |> write_rds("app/datos/casen_2022_ingresos.rds")
