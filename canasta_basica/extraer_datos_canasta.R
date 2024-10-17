@@ -10,7 +10,7 @@ library(tabulapdf)
 library(tidyr)
 library(lubridate)
 
-informes_pdf <- dir("datos_originales", full.names = T)
+informes_pdf <- dir("canasta_basica/datos_originales", full.names = T)
 
 # extraer todas las tablas de todos los informes
 datos_informes <- map(informes_pdf, extract_tables)
@@ -85,6 +85,9 @@ canasta
 
 
 # guardar
-write.csv2(canasta, "datos_procesados/canasta_basica_alimentos_2018-2024.csv")
-writexl::write_xlsx(canasta, "datos_procesados/canasta_basica_alimentos_2018-2024.xlsx")
+write.csv2(canasta, "canasta_basica/datos_procesados/canasta_basica_alimentos_2018-2024.csv")
+writexl::write_xlsx(canasta, "canasta_basica/datos_procesados/canasta_basica_alimentos_2018-2024.xlsx")
 
+# guardar en app
+readr::read_csv2("canasta_basica/datos_procesados/canasta_basica_alimentos_2018-2024.csv") |> 
+  readr::write_rds("app/datos/canasta_basica_linea_pobreza.rds")

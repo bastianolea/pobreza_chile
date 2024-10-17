@@ -1,6 +1,7 @@
 library(shiny)
 library(readr)
 library(dplyr)
+library(lubridate)
 library(sf)
 library(ggplot2)
 library(ggiraph)
@@ -15,14 +16,17 @@ library(htmltools)
 pobreza_casen <- readr::read_rds("datos/casen_2022_pobreza.rds")
 ingresos_casen <- readr::read_rds("datos/casen_2022_ingresos.rds")
 
-# pobreza_historico <- readr::read_rds("app/datos/pobreza_historico.rds")
 pobreza_historico <- readr::read_rds("datos/pobreza_historico.rds")
 
-# setwd("app")
 mapa_pais <- read_rds("datos/mapa_pais.rds")
 mapas_regiones <- read_rds("datos/mapas_regiones.rds")
 
 campamentos <- read_rds("datos/campamentos_chile_puntos.rds")
+
+linea_pobreza <- read_rds("datos/canasta_basica_linea_pobreza.rds")
+
+cut_comunas <- read_csv2("datos/comunas_chile_cut.csv", col_types = c("cccc"))
+
 
 # colores ----
 # colores <- list("fondo" = "#181818",
@@ -35,6 +39,8 @@ colores <- list("fondo" = "#909090",
                 "bajo" = "#999999",
                 "alto" = "#F22222",
                 "principal" = "#F22222")
+
+thematic_shiny(font = "auto", accent = colores$principal)
 
 # funciones ----
 source("funciones.R")
@@ -62,22 +68,60 @@ ui <- page_fluid(
   fluidRow(
     ## torta ----
     column(6,
+           
+           h3("Porcentaje de pobreza en Chile"),
+           div("Porcentaje de la población que vive en situación de pobreza."),
+           
            div(
-             plotOutput("torta")
-           )
+             plotOutput("g_torta_pais") |> withSpinner()
+           ),
+           p("Texto explicativo"),
+           div(class = "fuente",
+               "Fuente:")
     ),
     
+    
+    ### evolución ----
     column(6,
+           
+           h3("Evolución de la pobreza en Chile"),
+           h4("Porcentaje de la población que vive en situación de pobreza, según nivel de pobreza, desde 2009 a la fecha."),
            div(
-             # plotOutput("torta")
-           )
+             plotOutput("g_evolucion_pais") |> withSpinner()
+           ),
+           p("Texto explicativo"),
+           div(class = "fuente",
+               "Fuente:")
+    )
+  ),
+  
+  ### Línea de pobreza ----
+  fluidRow(
+    column(12,
+           h3("Línea de pobreza"),
+           h4("Subtítulo"),
+           div(
+             plotOutput("g_linea_pobreza") |> withSpinner()      
+           ),
+           p("Texto explicativo"),
+           div(class = "fuente",
+               "Fuente:")
     )
   ),
   
   
   fluidRow(
+    
+    column(12, style = css(margin_top = "20px"),
+           h3("Pobreza por regiones"),
+           h4("Subtítulo"),
+           p("Presione una región del mapa nacional para ver la región con su comunas en detalle.")
+    ),
+    
     ## mapa país ----
     column(4, #style = "border: 1px red solid;",
+           
+           
            div(#style = "max-height: 600px;",
              girafeOutput("mapa_pais", height = 700) |> withSpinner(proxy.height = 400)
            )
@@ -88,19 +132,35 @@ ui <- page_fluid(
              girafeOutput("mapa_region", height = 400) |> withSpinner()
            ),
            
+           
+           ### evolución
            div(
              # selectInput("selector_evolucion", label = "ver", choices = c("Región", "Comuna")),
              
+             htmlOutput("titulo_grafico_evolucion"),
+             
              # el gráfico muestra datos de región al elegir una región, o de comuna si se aprieta una comuna, y vuelve a mostrar región si se cambia de región
              plotOutput("grafico_evolucion") |> withSpinner()
-           )
+           ), 
+           
+           tableOutput("tabla_evolucion") |> withSpinner()
+           
     )
   ),
   
-  # campamentos ----
+  ## campamentos ----
   fluidRow(
     column(12,
-           girafeOutput("mapa_region_campamentos", height = 600) |> withSpinner()
+           h3("Campamentos"),
+           h4("Subtítulo"),
+           
+           selectInput("region_campamentos",
+                       "Región",
+                       choices = NULL),
+           
+           girafeOutput("mapa_region_campamentos", height = 600) |> withSpinner(),
+           
+           dataTableOutput("tabla_campamentos") |> withSpinner()
     )
   )
 )
@@ -114,8 +174,7 @@ server <- function(input, output) {
   casen_comuna <- reactive(pobreza_casen |> filter(nivel == "comuna"))
   
   # gráfico torta ----
-  output$torta <- renderPlot({
-    
+  output$g_torta_pais <- renderPlot({
     data <- tribble(~"valor", ~"tipo",
                     casen_pais()$pobreza_p, "pobreza",
                     1 - casen_pais()$pobreza_p, "total")
@@ -141,6 +200,47 @@ server <- function(input, output) {
       theme_void() +
       theme(plot.margin = margin(unit(rep(-40, 4), "cm"))) +
       guides(fill = guide_none()) +
+      theme(plot.background = element_rect(fill = colores$fondo, color = colores$fondo),
+            panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
+  }, bg = colores$fondo)
+  
+  pobreza_historico_pais <- reactive({
+    pobreza_historico |> 
+      filter(nivel == "pais")
+  })
+  
+  #grafico evolución ----
+  output$g_evolucion_pais <- renderPlot({
+    # browser()
+    pobreza_historico_pais() |> 
+      mutate(pobreza = forcats::fct_rev(pobreza)) |> 
+      ggplot(aes(as.factor(año), p, fill = pobreza)) +
+      geom_col()
+      # theme(plot.background = element_rect(fill = colores$fondo, color = colores$fondo),
+            # panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
+  }, bg = colores$fondo)
+  
+  # gráfico línea de probreza ----
+  
+  output$g_linea_pobreza <- renderPlot({
+    # browser()
+    linea_pobreza |> 
+      filter(variable %in% c("LP", "LPE")) |>
+      mutate(variable = recode(variable,
+                               "LP" = "Línea de pobreza",
+                               "LPE" = "Línea de pobreza extrema")) |> 
+      filter(year(fecha) >= 2019) |> 
+      ggplot(aes(fecha, valor, color = variable)) +
+      geom_line(linewidth = 1.2) +
+      scale_y_continuous(labels = scales::label_comma(big.mark = ".", decimal.mark = ","), 
+                         n.breaks = 8) +
+      scale_color_manual(values = c("Línea de pobreza" = "red",
+                                    "Línea de pobreza extrema" = "red4")) +
+      guides(color = guide_legend(position = "bottom")) +
+      theme_classic() +
+      theme(panel.grid.major.x = element_line()) +
+      # theme(plot.title = ggtext::element_textbox()) +
+      # labs(title = "Líneas de <span style='color:red;'>pobreza</span> y <span style='color:red4'>pobreza extrema</span>") +
       theme(plot.background = element_rect(fill = colores$fondo, color = colores$fondo),
             panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
   }, bg = colores$fondo)
@@ -294,20 +394,23 @@ server <- function(input, output) {
   })
   
   
-  ## mapa region campamentos ----
+  ## datos campamentos ----
   
+  datos_campamentos <- reactive({
+    req(region_seleccionada() != "")
+    
+    campamentos |> 
+      filter(as.numeric(cut_r) == as.numeric(region_seleccionada())) |> 
+      filter(n_hog > 0)
+  })
+  
+  ## mapa region campamentos ----
   output$mapa_region_campamentos <- renderGirafe({
     req(region_seleccionada())
-    req(mapa_region_datos())
     message("mapa region campamentos...")
     
     # browser()
-    mapa_campamentos <- campamentos |> 
-      filter(cut_r == region_seleccionada()) |> 
-      filter(n_hog > 0)
-    
-    
-    p <- mapa_campamentos |> 
+    p <- datos_campamentos() |> 
       ggplot() + 
       geom_sf(data = mapa_region(),
               aes(geometry = geometry),
@@ -351,10 +454,13 @@ server <- function(input, output) {
   
   # comuna seleccionada ----
   # inicialmente es NULL, si se elige una comuna adquiere su código único, y si se cambia de región vuelve a ser NULL
-  seleccion <- reactiveValues(comuna = NULL)
+  seleccion <- reactiveValues(activa = NULL, comuna = NULL)
   
   observeEvent(region_seleccionada(), {
     seleccion$comuna <- NULL
+    seleccion$activa <- "region"
+    
+    message("selección activa: ", seleccion$activa)
   })
   
   observeEvent(input$mapa_region_selected, {
@@ -366,39 +472,87 @@ server <- function(input, output) {
     message("comuna seleccionada: ", input$mapa_region_selected)
     
     seleccion$comuna <- input$mapa_region_selected
+    seleccion$activa <- "comuna"
+    
+    message("selección activa: ", seleccion$activa)
   })
   
-  # gráficos
+  
+  
+  # gráficos ----
+  
+  ## datos evolución ----
+  # el gráfico muestra datos de región al elegir una región, o de comuna si se aprieta una comuna, y vuelve a mostrar región si se cambia de región
+  datos_evolucion <- reactive({
+    req(length(seleccion$activa) > 0)
+    
+    # if (is.null(seleccion$comuna) || seleccion$comuna == "") {
+    if (seleccion$activa == "region") {
+      dato <- pobreza_historico |> 
+        filter(nivel == "region") |> 
+        filter(cut_region == region_seleccionada())
+      
+      
+    } else {
+      dato <- pobreza_historico |> 
+        filter(nivel == "comuna") |> 
+        filter(cut_comuna == seleccion$comuna)
+    }
+    return(dato)
+  })
+  
+  
+  
+  
   ## evolución region/comuna ----
   # el gráfico muestra datos de región al elegir una región, o de comuna si se aprieta una comuna, y vuelve a mostrar región si se cambia de región
   
   output$grafico_evolucion <- renderPlot({
-    
-    # if (input$selector_evolucion == "Región") {
-    if (is.null(seleccion$comuna) || seleccion$comuna == "") {
-      pobreza_historico |> 
-        filter(nivel == "region") |> 
-        filter(cut_region == region_seleccionada()) |> 
-        filter(pobreza != "No pobres") |> 
-        ggplot(aes(año, p, fill = pobreza)) +
-        geom_area() +
-        theme_minimal() +
-        theme(plot.background = element_rect(fill = colores$fondo, color = colores$fondo),
-              panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
-      
-    } else {
-      pobreza_historico |> 
-        filter(nivel == "comuna") |> 
-        filter(cut_comuna == seleccion$comuna) |> 
-        filter(pobreza != "No pobres") |> 
-        ggplot(aes(año, p, fill = pobreza)) +
-        geom_area() +
-        theme_minimal() +
-        theme(plot.background = element_rect(fill = colores$fondo, color = colores$fondo),
-              panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
-    }
+    datos_evolucion() |> 
+      filter(pobreza != "No pobres") |> 
+      ggplot(aes(año, p, fill = pobreza)) +
+      geom_area() +
+      theme_minimal() +
+      theme(plot.background = element_rect(fill = colores$fondo, color = colores$fondo),
+            panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
   })
   
+  ### titulo  ----
+  
+  output$titulo_grafico_evolucion <- renderUI({
+    req(length(seleccion$activa) > 0)
+    # browser()
+    region_nombre <- unique(cut_comunas$region[cut_comunas$cut_region == region_seleccionada()])
+    if (seleccion$activa == "region") {
+      div(
+        h3("Evolución de la pobreza en la región de ", region_nombre)
+      )
+    } else {
+      div(
+        h3("Evolución de la pobreza en la comuna de ", cut_comunas$comuna[cut_comunas$cut_comuna == seleccion$comuna]),
+        h4("Región de ", region_nombre)
+      )
+      
+      
+    }
+    
+  })
+  
+  # tablas ----
+  
+  ## tabla evolución ----
+  output$tabla_evolucion <- renderTable({
+    datos_evolucion()
+  })
+  
+  ## tabla campamentos ----
+  output$tabla_campamentos <- renderDataTable({
+    req(region_seleccionada())
+    req(nrow(datos_campamentos()) > 0)
+    message("tabla campamentos...")
+    # browser()
+    datos_campamentos()
+  })
 }
 
 shinyApp(ui = ui, server = server)

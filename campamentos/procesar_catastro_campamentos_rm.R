@@ -2,6 +2,7 @@ library(dplyr)
 library(sf)
 library(janitor)
 library(readr)
+library(stringr)
 
 # datos campamentos ----
 # carga los datos de campamentos descargados
@@ -30,5 +31,8 @@ campamentos |>
 
 # guardar en app
 campamentos |> 
+  # st_drop_geometry()
   select(-geometry) |> 
+  # corregir error en ggiraph por nombres con comillas
+  mutate(nombre = str_remove_all(nombre, "'")) |> 
   write_rds("app/datos/campamentos_chile_puntos.rds")

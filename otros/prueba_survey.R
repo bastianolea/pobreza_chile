@@ -11,7 +11,8 @@ casen2 <- mutate(casen,
                  pobreza_no_extrema = case_when( pobreza==2 ~1, TRUE~ 0),
                  no_pobreza = case_when( pobreza==3 ~1, TRUE~ 0))
 
-casen2 |> count(pobreza_no_extrema)
+casen2 |> 
+  count(pobreza_no_extrema)
 
 disenio = svydesign(id=~varunit, # Etiquetas UPM
                     strata=~varstrat, #Estratos
