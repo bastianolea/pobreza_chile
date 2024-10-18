@@ -61,7 +61,7 @@ casen_17 <- read_dta("casen/datos_originales/casen2017.dta",
 ) 
 
 
-# casen 2022 ----
+## casen 2022 ----
 casen_22 <- readr::read_rds("casen/datos_procesados/casen2022.rds") |> 
   select(region, provincia, comuna, expr, expc, 
          starts_with("pobreza"))
@@ -305,4 +305,4 @@ pobreza_historico <- bind_rows(
 readr::write_rds(pobreza_historico, "casen/datos_procesados/pobreza_historico.rds")
 
 # copiar a la app
-readr::read_rds("casen/datos_procesados/pobreza_historico.rds") |> readr::write_rds("app/datos/pobreza_historico.rds")
+readr::write_rds(pobreza_historico, "app/datos/pobreza_historico.rds")

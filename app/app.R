@@ -9,10 +9,12 @@ library(bslib)
 library(thematic)
 library(shinycssloaders)
 library(htmltools)
+library(gt)
 
 
 
 # cargar datos ----
+# setwd("app")
 pobreza_casen <- readr::read_rds("datos/casen_2022_pobreza.rds")
 ingresos_casen <- readr::read_rds("datos/casen_2022_ingresos.rds")
 
@@ -36,6 +38,7 @@ cut_comunas <- read_csv2("datos/comunas_chile_cut.csv", col_types = c("cccc"))
 
 colores <- list("fondo" = "#909090",
                 "texto" = "#181818",
+                "detalle" = "#404040",
                 "bajo" = "#999999",
                 "alto" = "#F22222",
                 "principal" = "#F22222")
@@ -128,7 +131,10 @@ ui <- page_fluid(
     ),
     ## mapa región ----
     column(8, #style = "border: 1px blue solid;",
+           htmlOutput("titulo_mapa_region"),
+           
            div(#style = "max-height: 200px;",
+             
              girafeOutput("mapa_region", height = 400) |> withSpinner()
            ),
            
@@ -143,7 +149,7 @@ ui <- page_fluid(
              plotOutput("grafico_evolucion") |> withSpinner()
            ), 
            
-           tableOutput("tabla_evolucion") |> withSpinner()
+           gt_output("tabla_evolucion") |> withSpinner()
            
     )
   ),
@@ -216,8 +222,8 @@ server <- function(input, output) {
       mutate(pobreza = forcats::fct_rev(pobreza)) |> 
       ggplot(aes(as.factor(año), p, fill = pobreza)) +
       geom_col()
-      # theme(plot.background = element_rect(fill = colores$fondo, color = colores$fondo),
-            # panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
+    # theme(plot.background = element_rect(fill = colores$fondo, color = colores$fondo),
+    # panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
   }, bg = colores$fondo)
   
   # gráfico línea de probreza ----
@@ -245,6 +251,9 @@ server <- function(input, output) {
             panel.background = element_rect(fill = colores$fondo, color = colores$fondo))
   }, bg = colores$fondo)
   
+  
+  
+  # —-----
   # mapas ----
   
   # unir mapa con datos
@@ -315,7 +324,9 @@ server <- function(input, output) {
   
   
   
-  ### selector de mapas ----
+  ### selectores  ----
+  
+  #### region ----
   # si la región elegida es el gran santiago, pasa como 99 y elige el mapa específico;
   # de lo contrario, simplemente carga el mapa de la región correspondiente
   region_seleccionada <- reactive({
@@ -327,6 +338,41 @@ server <- function(input, output) {
     message("región seleccionada: ", input$mapa_pais_selected)
     return(input$mapa_pais_selected)
   })
+
+  region_seleccionada_nombre <- reactive({
+    unique(cut_comunas$region[cut_comunas$cut_region == region_seleccionada()])
+  })
+  
+  #### comuna ----
+
+  # inicialmente es NULL, si se elige una comuna adquiere su código único, y si se cambia de región vuelve a ser NULL
+  seleccion <- reactiveValues(activa = NULL, comuna = NULL)
+  
+  observeEvent(region_seleccionada(), {
+    seleccion$comuna <- NULL
+    seleccion$activa <- "region"
+    
+    message("selección activa: ", seleccion$activa)
+  })
+  
+  observeEvent(input$mapa_region_selected, {
+    req(input$mapa_region_selected != "",
+        length(input$mapa_region_selected) == 1,
+        !is.na(input$mapa_region_selected),
+        !is.null(input$mapa_region_selected))
+    
+    message("comuna seleccionada: ", input$mapa_region_selected)
+    
+    seleccion$comuna <- input$mapa_region_selected
+    seleccion$activa <- "comuna"
+    
+    message("selección activa: ", seleccion$activa)
+  })
+  
+  comuna_seleccionada_nombre <- reactive({
+    cut_comunas$comuna[cut_comunas$cut_comuna == seleccion$comuna]
+  })
+  
   
   ## mapa región ----
   
@@ -393,6 +439,23 @@ server <- function(input, output) {
     ) 
   })
   
+  ### titulo ----
+  output$titulo_mapa_region <- renderUI({
+    req(length(seleccion$activa) > 0)
+    # browser()
+    
+    # if (seleccion$activa == "region") {
+    div(
+      h3("Región de ", region_seleccionada_nombre())
+    )
+    # } else {
+    #   div(
+    #     h3("Evolución de la pobreza en la comuna de ", comuna_seleccionada_nombre()),
+    #     h4("Región de ", region_seleccionada_nombre())
+    #   )
+    # }
+  })
+  
   
   ## datos campamentos ----
   
@@ -452,36 +515,11 @@ server <- function(input, output) {
   })
   
   
-  # comuna seleccionada ----
-  # inicialmente es NULL, si se elige una comuna adquiere su código único, y si se cambia de región vuelve a ser NULL
-  seleccion <- reactiveValues(activa = NULL, comuna = NULL)
-  
-  observeEvent(region_seleccionada(), {
-    seleccion$comuna <- NULL
-    seleccion$activa <- "region"
-    
-    message("selección activa: ", seleccion$activa)
-  })
-  
-  observeEvent(input$mapa_region_selected, {
-    req(input$mapa_region_selected != "",
-        length(input$mapa_region_selected) == 1,
-        !is.na(input$mapa_region_selected),
-        !is.null(input$mapa_region_selected))
-    
-    message("comuna seleccionada: ", input$mapa_region_selected)
-    
-    seleccion$comuna <- input$mapa_region_selected
-    seleccion$activa <- "comuna"
-    
-    message("selección activa: ", seleccion$activa)
-  })
   
   
+  # —----
   
-  # gráficos ----
-  
-  ## datos evolución ----
+  ## gráfico evolución bajo mapa ----
   # el gráfico muestra datos de región al elegir una región, o de comuna si se aprieta una comuna, y vuelve a mostrar región si se cambia de región
   datos_evolucion <- reactive({
     req(length(seleccion$activa) > 0)
@@ -494,8 +532,10 @@ server <- function(input, output) {
       
       
     } else {
+      # browser()
       dato <- pobreza_historico |> 
-        filter(nivel == "comuna") |> 
+        filter(nivel == "comuna") |>
+        # filter(comuna == "Tiltil")
         filter(cut_comuna == seleccion$comuna)
     }
     return(dato)
@@ -522,28 +562,47 @@ server <- function(input, output) {
   output$titulo_grafico_evolucion <- renderUI({
     req(length(seleccion$activa) > 0)
     # browser()
-    region_nombre <- unique(cut_comunas$region[cut_comunas$cut_region == region_seleccionada()])
+    
     if (seleccion$activa == "region") {
       div(
-        h3("Evolución de la pobreza en la región de ", region_nombre)
+        h3("Evolución de la pobreza en la región de ", region_seleccionada_nombre())
       )
     } else {
       div(
-        h3("Evolución de la pobreza en la comuna de ", cut_comunas$comuna[cut_comunas$cut_comuna == seleccion$comuna]),
-        h4("Región de ", region_nombre)
+        h3("Evolución de la pobreza en la comuna de ", comuna_seleccionada_nombre()),
+        h4("Región de ", region_seleccionada_nombre())
       )
-      
-      
     }
-    
   })
   
   # tablas ----
   
   ## tabla evolución ----
-  output$tabla_evolucion <- renderTable({
-    datos_evolucion()
-  })
+  output$tabla_evolucion <- render_gt({
+    # if (seleccion$activa == "region") {
+      
+      dato <- datos_evolucion() |> 
+        filter(pobreza != "No pobres") |> 
+        select(pobreza, año, p)
+      
+      dato |> 
+        tidyr::pivot_wider(names_from = año, values_from = p) |> 
+        gt() |> 
+        fmt_percent(columns = where(is.numeric), decimals = 0) |> 
+        data_color(columns = where(is.numeric), rows = 1:2, 
+                   method = "numeric", 
+                   palette = c(colores$bajo, colores$alto),
+                   domain = c(0, max(dato$p)),
+                   direction = "column") |> 
+        tab_options(table.background.color = colores$fondo,
+                    table_body.hlines.color = colores$detalle,
+                    table_body.border.top.color = colores$detalle,
+                    column_labels.border.top.color = colores$detalle, 
+                    column_labels.border.bottom.color = colores$detalle, 
+                    table_body.border.bottom.color = colores$detalle) |> 
+        cols_label(pobreza = "")
+      
+    })
   
   ## tabla campamentos ----
   output$tabla_campamentos <- renderDataTable({
@@ -553,6 +612,7 @@ server <- function(input, output) {
     # browser()
     datos_campamentos()
   })
-}
-
-shinyApp(ui = ui, server = server)
+  }
+  
+  shinyApp(ui = ui, server = server)
+  

@@ -55,7 +55,9 @@ variables_numericas_personas <- c(
 
 # modificar formato de algunas variables, de manera preliminar
 casen2022 <- casen2022 |> 
-  mutate(pobreza = as_factor(pobreza),
+  mutate(#comuna = as_factor(comuna),
+         #region = as_factor(region),
+         pobreza = as_factor(pobreza),
          pobreza_multi_5d = as_factor(pobreza_multi_5d))
 
 casen_region <- casen2022 |> 
@@ -121,12 +123,12 @@ casen_region_conteo_personas <- casen_region |>
 casen_pais_conteo_personas <- casen_region_conteo_personas |> 
   ungroup() |> 
   summarize(across(where(is.numeric), sum)) |> 
-  select(-region)
+  select(-any_of("region"))
 
 casen_pais_numericos_personas <- casen_region_numericos_personas |> 
   ungroup() |> 
   summarize(across(where(is.numeric), mean)) |> 
-  select(-region)
+  select(-any_of("region"))
 
 
 # porcentajes ----
@@ -163,6 +165,7 @@ pobreza_comuna <- casen_comuna_conteo_personas_p |>
 pobreza_region <- casen_region_conteo_personas_p |> 
   select(region, ends_with("_p")) |> 
   mutate(across(where(is.labelled), as.numeric))
+
 
 ingresos_pais <- casen_pais_numericos_personas
 
