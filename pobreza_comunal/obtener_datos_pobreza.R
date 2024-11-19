@@ -32,4 +32,5 @@ dato_3 <- dato_2 |>
 
 # guardar resultado
 readr::write_rds(dato_3, "pobreza_comunal/datos_procesados/pobreza_comunal.rds")
+readr::write_csv2(dato_3, "pobreza_comunal/datos_procesados/pobreza_comunal.csv")
 readr::write_rds(dato_3, "app/datos/pobreza_comunal.rds")
